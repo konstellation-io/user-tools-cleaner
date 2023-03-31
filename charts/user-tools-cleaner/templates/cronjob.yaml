@@ -1,0 +1,66 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  creationTimestamp: null
+  name: {{ template "user-tools-cleaner.fullname" . }}
+spec:
+  schedule: {{ .Values.schedule | quote }}
+  concurrencyPolicy: {{ .Values.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ .Values.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.failedJobsHistoryLimit }}
+  jobTemplate:
+    metadata:
+      name: {{ template "user-tools-cleaner.fullname" . }}
+      {{- with .Values.jobAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      activeDeadlineSeconds: {{ .Values.jobSpec.activeDeadlineSeconds }}
+      ttlSecondsAfterFinished: {{ .Values.jobSpec.ttlSecondsAfterFinished }}
+      backoffLimit: {{ .Values.jobSpec.backoffLimit }}
+      template:
+        metadata:
+          {{- with .Values.podAnnotations }}
+          annotations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        spec:
+          restartPolicy: Never
+          {{- with .Values.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          serviceAccountName: {{ include "user-tools-cleaner.serviceAccountName" . }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+          - image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+            name: {{ .Chart.Name }}
+            imagePullPolicy: {{ .Values.image.pullPolicy }}
+            resources: 
+              {{- toYaml .Values.resources | nindent 14 }}
+            command: ["/bin/sh", "/cleaner.sh"]
+            volumeMounts:
+            - name: cleaner-script
+              mountPath: /cleaner.sh
+              subPath: cleaner.sh
+          {{- with .Values.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumes:
+          - name: cleaner-script
+            configMap:
+              name: {{ template "user-tools-cleaner.fullname" . }}
+              items:
+              - key: cleaner.sh
+                path: cleaner.sh
